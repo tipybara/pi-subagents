@@ -16,7 +16,6 @@ import { defineTool, type ExtensionAPI, type ExtensionCommandContext, type Exten
 import { Container, Key, matchesKey, type SettingItem, SettingsList, Spacer, Text } from "@earendil-works/pi-tui";
 import { Type } from "@sinclair/typebox";
 import { abortable } from "./abortable.js";
-import { hasAgentBadge, renderAgentName } from "./agent-color.js";
 import { buildNewAgentFile, disableInContent, enableInContent, isEmptyStub, locateAgentFile, personalAgentsDir, projectAgentsDir, serializeAgentFile } from "./agent-file-toggle.js";
 import { AgentManager } from "./agent-manager.js";
 import { getAgentConversation, getDefaultMaxTurns, getGraceTurns, getRememberAgents, normalizeMaxTurns, SUBAGENT_TOOL_NAMES, setDefaultMaxTurns, setGraceTurns, setRememberAgents, steerAgent } from "./agent-runner.js";
@@ -1426,27 +1425,19 @@ Terse command-style prompts produce shallow, generic work.
       ...scheduleParam,
     }),
 
-    // ---- Custom rendering: Claude Code style ----
+    renderShell: "self" as const,
 
-    renderCall(args, theme, context) {
-      // A badge closes its own background, which would clear the tool block's row tint
-      // for the rest of the line, so the badge restores it. The tint is opened here too:
-      // the TUI's Box paints it, but HTML export takes it from CSS, and restoring a
-      // background the line never opened is what banded the export before. The line is
-      // deliberately left open — Box.applyBackgroundToLine pads to width and *then*
-      // wraps, so closing here would leave that padding untinted, and HTML export closes
-      // any open span per line anyway. No badge means no tint, so an uncolored agent
-      // renders exactly the line it always did.
-      const rowBackground = hasAgentBadge(args.subagent_type)
-        ? theme.getBgAnsi(context.isPartial ? "toolPendingBg" : context.isError ? "toolErrorBg" : "toolSuccessBg")
-        : "";
-      const desc = args.description ?? "";
-      const name = renderAgentName(args.subagent_type, theme, {
-        fallbackColor: "toolTitle",
-        restoreBackground: rowBackground,
-        bold: true,
-      });
-      return new Text(rowBackground + "▸ " + name + (desc ? "  " + theme.fg("muted", desc) : ""), 0, 0);
+    renderCall(args, theme) {
+      const desc = (args.description ?? "").trim();
+      const typeName = args.subagent_type ? getDisplayName(args.subagent_type) : "Agent";
+      const inside = desc ? `${desc} · ${typeName}` : typeName;
+      const line =
+        theme.fg("accent", "⏺ ") +
+        theme.fg("toolTitle", theme.bold("Agent")) +
+        theme.fg("muted", "(") +
+        theme.fg("dim", inside) +
+        theme.fg("muted", ")");
+      return new Text(line, 0, 0);
     },
 
     renderResult(result, { expanded, isPartial }, theme, renderContext) {
@@ -2064,6 +2055,26 @@ Terse command-style prompts produce shallow, generic work.
         description: "The steering message to send. This will appear as a user message in the agent's conversation.",
       }),
     }),
+    renderCall(args, theme) {
+      const id = String(args.agent_id ?? "").slice(0, 12);
+      const msg = String(args.message ?? "").replace(/\s+/g, " ").trim();
+      const preview = msg.length > 80 ? `${msg.slice(0, 80)}…` : msg;
+      return new Text(
+        theme.fg("warning", "✎ Steer") +
+          theme.fg("muted", "(") +
+          theme.fg("dim", id) +
+          theme.fg("muted", ") ") +
+          theme.fg("toolTitle", preview),
+        0,
+        0,
+      );
+    },
+    renderResult(result, { isPartial }, theme) {
+      if (isPartial) return new Text(theme.fg("warning", "  ⎿  Steering…"), 0, 0);
+      const text = result.content[0]?.type === "text" ? result.content[0].text : "";
+      const first = (text.split("\n").find(line => line.trim()) ?? text).trim();
+      return new Text(theme.fg("dim", `  ⎿  ${first.slice(0, 120)}`), 0, 0);
+    },
     execute: async (_toolCallId, params, _signal, _onUpdate, _ctx) => {
       const record = resolveAgentRef(params.agent_id);
       if (!record || record.parentAgentId) {

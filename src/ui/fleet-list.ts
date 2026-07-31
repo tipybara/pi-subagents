@@ -2,8 +2,9 @@
  * fleet-list.ts — Claude Code-style "FleetView" list rendered below the editor.
  *
  * Shows `main` + each running/queued subagent as a navigable list. Pressing ↓ (or
- * ←) at an empty prompt activates the list; ↑/↓ move the selection (filled ● marker),
- * Enter opens the selected agent's live conversation overlay, Esc returns to the prompt.
+ * ← / Ctrl+N) at an empty prompt activates the list; ↑/↓ (or Ctrl+P/Ctrl+N) move the
+ * selection (filled ● marker), Enter opens the selected agent's live conversation
+ * overlay, Esc returns to the prompt.
  * A viewer stays open when its agent finishes; finished agents linger briefly in the list.
  *
  * Mechanics (see plan): the list is a `belowEditor` widget (render-only), and ALL key
@@ -228,8 +229,10 @@ export class FleetList {
     }
 
     if (!this.active) {
-      // Activate: ↓ or ← at an empty prompt moves focus into the list.
-      const isActivator = matchesKey(data, "down") || matchesKey(data, "left");
+      const isActivator =
+        matchesKey(data, "down") ||
+        matchesKey(data, "left") ||
+        matchesKey(data, "ctrl+n");
       if (isActivator && this.agentRecords().length > 0 && this.ui.getEditorText() === "") {
         this.active = true;
         this.selectedIndex = 0;
@@ -239,14 +242,14 @@ export class FleetList {
       return undefined;
     }
 
-    // Active — arrows navigate, Enter opens, Esc / Up-past-top exits.
-    if (matchesKey(data, "down")) {
+    // Active — arrows and Emacs keys navigate, Enter opens, Esc / Up-past-top exits.
+    if (matchesKey(data, "down") || matchesKey(data, "ctrl+n")) {
       const max = this.roster().length - 1;
       this.selectedIndex = Math.min(max, this.selectedIndex + 1);
       this.update();
       return { consume: true };
     }
-    if (matchesKey(data, "up")) {
+    if (matchesKey(data, "up") || matchesKey(data, "ctrl+p")) {
       if (this.selectedIndex === 0) { this.deactivate(); return { consume: true }; }
       this.selectedIndex -= 1;
       this.update();
@@ -372,16 +375,16 @@ export class FleetList {
   }
 
   private renderAgentRow(rosterIndex: number, sel: number, record: AgentRecord, width: number, theme: Theme): string {
-    // The selected row renders in the theme's primary text color so it reads as
-    // one selection (#230). A configured badge survives — Claude Code's FleetView
-    // keeps the agent color on the selected row too and only bolds it — which also
-    // keeps the row's width fixed as the selection moves.
     const selected = rosterIndex === sel;
-    const name = renderAgentName(record.type, theme, selected
+    const description = record.description?.trim();
+    const typeName = renderAgentName(record.type, theme, selected
       ? { fallbackColor: "text", bold: hasAgentBadge(record.type) }
       : { fallbackColor: "muted" });
-    const description = selected ? theme.fg("text", record.description) : record.description;
-    const left = `  ${this.bullet(rosterIndex, sel, theme)} ${name}  ${description}`;
+    const title = description
+      ? selected ? theme.fg("text", description) : description
+      : typeName;
+    const typeTag = description ? theme.fg(selected ? "text" : "dim", " · ") + typeName : "";
+    const left = `  ${this.bullet(rosterIndex, sel, theme)} ${title}${typeTag}`;
     const tokens = getLifetimeTotal(this.agentActivity.get(record.id)?.lifetimeUsage ?? record.lifetimeUsage);
     const elapsedMs = (record.completedAt ?? Date.now()) - record.startedAt; // freezes once finished
     const stats = `${formatFleetElapsed(elapsedMs)} · ${formatFleetTokens(tokens)}`;

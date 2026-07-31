@@ -21,6 +21,27 @@ const MIN_VIEWPORT = 3;
 /** Height ceiling shared by the overlay's `maxHeight` and the viewer's internal viewport cap. */
 export const VIEWPORT_HEIGHT_PCT = 70;
 
+/**
+ * Paint a full-width background on a steer message line so it stands out from
+ * normal user/assistant text. Uses theme.bg when available (pi Theme has it;
+ * our local Theme type is fg/bold-only).
+ */
+function paintSteerBg(th: Theme, line: string, width: number): string {
+  const bgFn = (th as Theme & { bg?: (color: string, text: string) => string }).bg;
+  // Pad to full width so the wash covers the row
+  const vis = visibleWidth(line);
+  const pad = Math.max(0, width - vis);
+  const full = line + " ".repeat(pad);
+  if (typeof bgFn === "function") {
+    // toolPendingBg = soft amber/grey wash — distinct without looking like an error
+    // Keep `this` bound: pi 0.82+ theme is a Proxy with prototype methods;
+    // detached `bg(...)` crashes on undefined `this.bgColors`.
+    return (th as Theme & { bg: (color: string, text: string) => string }).bg("toolPendingBg", full);
+  }
+  // Fallback: warning-colored prefix bar if bg is unavailable
+  return th.fg("warning", "▌ ") + full;
+}
+
 export class ConversationViewer implements Component {
   private scrollOffset = 0;
   private autoScroll = true;
@@ -293,6 +314,7 @@ export class ConversationViewer implements Component {
     }
 
     let needsSeparator = false;
+    let userMsgIndex = 0; // 0 = initial prompt; later user msgs are steers / resumes
     for (const msg of messages) {
       if (msg.role === "user") {
         const text = typeof msg.content === "string"
@@ -300,9 +322,22 @@ export class ConversationViewer implements Component {
           : extractText(msg.content);
         if (!text.trim()) continue;
         if (needsSeparator) lines.push(th.fg("dim", "───"));
-        lines.push(th.fg("accent", "[User]"));
-        for (const line of wrapTextWithAnsi(text.trim(), width)) {
-          lines.push(line);
+
+        // First user message = task prompt; later ones = steers (or resume prompts).
+        // Highlight steers with a distinct label + background so they don't blend in.
+        const isSteer = userMsgIndex > 0;
+        userMsgIndex += 1;
+
+        if (isSteer) {
+          lines.push(th.fg("warning", "✎ [Steer]"));
+          for (const line of wrapTextWithAnsi(text.trim(), width)) {
+            lines.push(paintSteerBg(th, line, width));
+          }
+        } else {
+          lines.push(th.fg("accent", "[User]"));
+          for (const line of wrapTextWithAnsi(text.trim(), width)) {
+            lines.push(line);
+          }
         }
       } else if (msg.role === "assistant") {
         const textParts: string[] = [];

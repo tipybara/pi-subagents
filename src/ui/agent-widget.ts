@@ -350,7 +350,14 @@ export class AgentWidget {
     parts.push(duration);
 
     const modeTag = modeLabel ? ` ${theme.fg("dim", `(${modeLabel})`)}` : "";
-    return `${icon} ${renderAgentName(a.type, theme, { fallbackColor: "dim" })}${modeTag}  ${theme.fg("dim", a.description)} ${theme.fg("dim", "·")} ${theme.fg("dim", parts.join(" · "))}${statusText}`;
+    const description = a.description?.trim();
+    const title = description
+      ? theme.fg("dim", description)
+      : renderAgentName(a.type, theme, { fallbackColor: "dim" });
+    const typeTag = description
+      ? theme.fg("dim", " · ") + renderAgentName(a.type, theme, { fallbackColor: "dim" })
+      : "";
+    return `${icon} ${title}${typeTag}${modeTag} ${theme.fg("dim", "·")} ${theme.fg("dim", parts.join(" · "))}${statusText}`;
   }
 
   /**
@@ -407,8 +414,15 @@ export class AgentWidget {
 
       const activity = bg ? describeActivity(bg.activeTools, bg.responseText) : "thinking…";
 
+      const description = a.description?.trim();
+      const title = description
+        ? theme.bold(description)
+        : renderAgentName(a.type, theme, { bold: true });
+      const typeTag = description
+        ? theme.fg("dim", " · ") + renderAgentName(a.type, theme, { fallbackColor: "dim" })
+        : "";
       runningLines.push([
-        truncate(theme.fg("dim", "├─") + ` ${theme.fg("accent", frame)} ${renderAgentName(a.type, theme, { bold: true })}${modeTag}  ${theme.fg("muted", a.description)} ${theme.fg("dim", "·")} ${fgPreservingNestedStyles(theme, "dim", statsText)}`),
+        truncate(theme.fg("dim", "├─") + ` ${theme.fg("accent", frame)} ${title}${typeTag}${modeTag} ${theme.fg("dim", "·")} ${fgPreservingNestedStyles(theme, "dim", statsText)}`),
         truncate(theme.fg("dim", "│  ") + theme.fg("dim", `  ⎿  ${activity}`)),
       ]);
     }

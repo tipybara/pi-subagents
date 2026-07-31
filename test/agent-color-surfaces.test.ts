@@ -37,6 +37,7 @@ type SessionHandler = (...args: unknown[]) => unknown;
 
 interface RegisteredTool {
   name: string;
+  renderShell?: string;
   renderCall(
     args: Record<string, unknown>,
     activeTheme: typeof theme,
@@ -102,7 +103,7 @@ afterEach(() => {
 });
 
 describe("custom agent color runtime surfaces", () => {
-  it("renders the registered Agent tool call header with the display name and color", async () => {
+  it("renders the registered Agent tool call as compact description-first text", async () => {
     const { pi, tools, handlers } = makePi();
     subagentsExtension(pi);
     registerColoredReviewer();
@@ -110,38 +111,25 @@ describe("custom agent color runtime surfaces", () => {
     try {
       const tool = tools.get("Agent");
       if (!tool) throw new Error("Agent tool was not registered");
-      const render = (context: { isPartial: boolean; isError: boolean }) => tool.renderCall(
+      const output = tool.renderCall(
         { subagent_type: TYPE, description: "Review this change" },
         theme,
-        context,
-      ).render(120).join("\n");
-      const output = render({ isPartial: false, isError: false });
+        { isPartial: false, isError: false },
+      ).render(240).join("\n");
 
-      expect(output).toContain(DISPLAY_NAME);
-      expect(output).toContain(PURPLE_BACKGROUND);
-      // The row tint is opened by the line itself and restored after the badge, so the
-      // line reads the same whether or not the caller paints one (HTML export does not).
-      expect(output.indexOf("<toolSuccessBg>")).toBeLessThan(output.indexOf(PURPLE_BACKGROUND));
-      expect(output.split("<toolSuccessBg>")).toHaveLength(3); // opened once, restored after the badge
-      // Left open on purpose: Box pads to width and then wraps, so a reset here would
-      // leave the padding untinted. Nothing after the badge may close the background.
-      expect(output).not.toContain("\u001b[49m");
-      expect(render({ isPartial: true, isError: false })).toContain("<toolPendingBg>");
-      expect(render({ isPartial: false, isError: true })).toContain("<toolErrorBg>");
+      expect(tool.renderShell).toBe("self");
+      expect(output).toContain("<toolTitle>*Agent*</toolTitle>");
+      expect(output).toContain(`<dim>Review this change · ${DISPLAY_NAME}</dim>`);
+      expect(output).not.toContain(PURPLE_BACKGROUND);
+      expect(output).not.toContain("toolSuccessBg");
 
       const missingType = tool.renderCall(
         { description: "Review this change" },
         theme,
         { isPartial: false, isError: false },
-      ).render(120).join("\n");
+      ).render(240).join("\n");
       expect(missingType).toContain("<toolTitle>*Agent*</toolTitle>");
-      expect(missingType).not.toContain(PURPLE_BACKGROUND);
-
-      // An agent without a color must render the pre-badge line byte for byte:
-      // no badge, and no row background of our own for HTML export to pick up.
-      registerAgents(new Map([[TYPE, { ...config, color: undefined }]]));
-      const uncolored = render({ isPartial: false, isError: false });
-      expect(uncolored.trimEnd()).toBe(`▸ <toolTitle>*${DISPLAY_NAME}*</toolTitle>  <muted>Review this change</muted>`);
+      expect(missingType).toContain("<dim>Review this change · Agent</dim>");
     } finally {
       await handlers.get("session_shutdown")?.({}, { hasUI: false, ui: {} });
     }
