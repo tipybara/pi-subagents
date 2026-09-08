@@ -72,7 +72,6 @@ function makeActivity(): AgentActivity {
     toolUses: 0,
     responseText: "",
     turnCount: 1,
-    lifetimeUsage: { input: 0, output: 0, cacheWrite: 0 },
   };
 }
 
@@ -86,6 +85,9 @@ function makePi() {
       tools.set(registered.name, registered);
     }),
     registerCommand: vi.fn(),
+    registerEntryRenderer: vi.fn(),
+    registerFlag: vi.fn(),
+    getFlag: vi.fn(),
     on: vi.fn((event: string, handler: unknown) => handlers.set(event, handler as SessionHandler)),
     events: { emit: vi.fn(), on: vi.fn(() => vi.fn()) },
     appendEntry: vi.fn(),
@@ -132,6 +134,23 @@ describe("custom agent color runtime surfaces", () => {
       expect(missingType).toContain("<dim>Review this change · Agent</dim>");
     } finally {
       await handlers.get("session_shutdown")?.({}, { hasUI: false, ui: {} });
+    }
+  });
+
+  it("keeps the above-editor widget absent under the portable off setting", () => {
+    const record = makeRecord();
+    const widget = new AgentWidget(
+      { listAgents: () => [record] } as unknown as ConstructorParameters<typeof AgentWidget>[0],
+      new Map([[record.id, makeActivity()]]),
+      () => "off",
+    );
+    const setWidget = vi.fn();
+    widget.setUICtx({ setStatus: vi.fn(), setWidget });
+    try {
+      widget.update();
+      expect(setWidget.mock.calls.some(([, content]) => typeof content === "function")).toBe(false);
+    } finally {
+      widget.dispose();
     }
   });
 
