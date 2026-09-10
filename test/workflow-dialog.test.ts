@@ -527,6 +527,13 @@ describe("keys", () => {
     expect(press("k", { selectedPhase: 0 })?.state.selectedPhase).toBe(0);
   });
 
+  it("moves the phase selection with ctrl+n/ctrl+p", () => {
+    expect(press("\x0e")?.state.selectedPhase).toBe(1);
+    expect(press("\x0e", { selectedPhase: 1 })?.state.selectedPhase).toBe(1);
+    expect(press("\x10", { selectedPhase: 1 })?.state.selectedPhase).toBe(0);
+    expect(press("\x10", { selectedPhase: 0 })?.state.selectedPhase).toBe(0);
+  });
+
   it("moves the agent selection with j/k and clamps at both ends", () => {
     const agents = { level: "agent" as const };
     expect(press("j", agents)?.state.selectedAgent).toBe(1);

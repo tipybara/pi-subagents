@@ -945,8 +945,8 @@ export function handleWorkflowDialogKey(
     return { state: { ...state, level: "phases", promptExpanded: false } };
   }
 
-  const down = matchesKey(data, "j") || matchesKey(data, "down");
-  const up = matchesKey(data, "k") || matchesKey(data, "up");
+  const down = matchesKey(data, "j") || matchesKey(data, "down") || matchesKey(data, "ctrl+n");
+  const up = matchesKey(data, "k") || matchesKey(data, "up") || matchesKey(data, "ctrl+p");
   if (down || up) {
     const delta = down ? 1 : -1;
     if (state.level === "phases") {
